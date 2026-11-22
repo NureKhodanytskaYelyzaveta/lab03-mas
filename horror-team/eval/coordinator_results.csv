@@ -1,0 +1,10 @@
+query,repeat,experts,llm_calls,tokens,seconds
+Q1,1,sound_expert+vfx_expert,4,2974,9.9
+Q1,2,sound_expert+vfx_expert,4,3198,11.3
+Q1,3,sound_expert+vfx_expert,4,2816,8.8
+Q2,1,level_expert+sound_expert+vfx_expert,5,4136,15.05
+Q2,2,level_expert+sound_expert+vfx_expert,5,4576,61.1
+Q2,3,level_expert,3,2531,5.8
+Q3,1,level_expert+sound_expert+vfx_expert,5,4022,19.0
+Q3,2,level_expert+sound_expert+vfx_expert,5,4109,11.52
+Q3,3,level_expert+sound_expert+vfx_expert,5,4990,17.93

@@ -1,0 +1,11 @@
+id,system,beats,scene_issues,link_issues,audio_cues,visual_effects,peak_fear,drafts,stop_reason,llm_calls,tokens,seconds
+R1,team,5,0,0,5,5,75,1,approved,4,4004,21.64
+R1,solo,5,0,0,5,5,90,1,single call,1,1388,3.64
+R2,team,5,0,0,5,10,85,1,approved,4,4418,12.56
+R2,solo,4,0,0,4,4,80,1,single call,1,800,2.38
+R3,team,6,0,0,6,8,80,1,approved,4,4764,5.57
+R3,solo,4,0,0,4,4,85,1,single call,1,1170,6.47
+R4,team,5,0,0,6,6,85,1,approved,4,4447,8.55
+R4,solo,5,0,0,5,5,90,1,single call,1,1457,21.81
+R5,team,5,0,0,5,6,80,1,approved,4,4228,11.65
+R5,solo,5,0,0,5,5,95,1,single call,1,1390,6.72
