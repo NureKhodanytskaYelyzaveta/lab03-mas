@@ -8,6 +8,27 @@ LANGUAGE = ("Write all text values in Ukrainian; keep enum values and beat ids "
             "(B1, B2, ...) exactly as specified.")
 
 
+def build_researcher(model: BaseLlm | str, search_tool) -> Agent:
+    """Дослідник: єдиний агент з інструментом. Без output_schema, бо їх не можна поєднувати."""
+    return Agent(
+        name="researcher",
+        model=model,
+        description="Finds relevant facts in the knowledge base for the scene request.",
+        instruction=f"""
+You are a game-design researcher with access to the project knowledge base.
+Scene request: {{request}}
+Call search_knowledge 1-3 times with focused questions (fear scale, sound, light,
+horror techniques). Then write at most 6 short bullet points with facts that help
+to design the scene, each ending with its source like [[Note#Section]].
+If the tool returns NOT_FOUND, write exactly: no relevant notes.
+Never invent facts and never cite sources that the tool did not return.
+{LANGUAGE}
+""",
+        tools=[search_tool],
+        output_key="kb_notes",
+    )
+
+
 def build_agents(model: BaseLlm | str) -> dict[str, Agent]:
     scene = Agent(
         name="scene_designer",
@@ -21,6 +42,8 @@ reaches a peak of at least 70 and then gives the player a release: a later beat
 at least 15 points lower than the peak. Prefer ambiguity, isolation and sound
 over cheap jump scares. Add 2-4 short inner voice lines for the hero.
 Do not describe sound or visual effects: other specialists do that.
+Notes from the project knowledge base (may be empty): {{kb_notes?}}
+Use them only when they fit the request and do not contradict it.
 Feedback from the previous review (empty on the first draft): {{feedback?}}
 {LANGUAGE}
 """,

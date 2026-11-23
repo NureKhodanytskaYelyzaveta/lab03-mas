@@ -23,3 +23,7 @@ REVISE = {"decision": "REVISE", "comments": ["більше невизначен�
 # унікальні фрагменти інструкцій агентів (маркери для ScriptedLlm)
 SCENE, AUDIO_M, VISUAL_M, DIRECTOR = (
     "horror scene designer", "sound designer", "visual effects artist", "creative director")
+
+RESEARCHER = "game-design researcher"
+LOUD_AUDIO = {"cues": [{**c, "kind": "stinger", "volume": 0.95} if c["beat_id"] == "B4" else c
+                       for c in AUDIO["cues"]]}

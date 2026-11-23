@@ -29,3 +29,27 @@ class ScriptedLlm(BaseLlm):
                                                         parts=[types.Part(text=text)]))
                 return
         raise AssertionError(f"no scripted reply for instruction: {instruction[:80]}")
+
+
+class ToolCallingLlm(ScriptedLlm):
+    """Як ScriptedLlm, але агент-дослідник спершу викликає search_knowledge,
+    а після відповіді інструмента пише підсумок зі сценарію."""
+    tool_query: str = "how does silence affect fear"
+
+    async def generate_content_async(self, llm_request: LlmRequest,
+                                     stream: bool = False) -> AsyncGenerator[LlmResponse, None]:
+        instruction = str(llm_request.config.system_instruction or "")
+        marker = "game-design researcher"
+        if marker not in instruction:
+            async for r in super().generate_content_async(llm_request, stream):
+                yield r
+            return
+        self.calls.append(marker)
+        got_tool_result = any(p.function_response for c in llm_request.contents or []
+                              for p in c.parts or [])
+        if not got_tool_result:
+            part = types.Part(function_call=types.FunctionCall(
+                name="search_knowledge", args={"query": self.tool_query}))
+        else:
+            part = types.Part(text=self.script[marker][0])
+        yield LlmResponse(content=types.Content(role="model", parts=[part]))

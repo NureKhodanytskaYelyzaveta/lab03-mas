@@ -2,6 +2,8 @@
 import json
 
 from google.adk import Context, Event
+from google.adk.events.request_input import RequestInput
+from pydantic import BaseModel, Field
 
 MAX_DRAFTS = 3  # скільки разів дизайнер сцени може переписати чернетку
 MAX_REQUEST_CHARS = 2000
@@ -10,6 +12,14 @@ MIN_BEATS, MAX_BEATS = 4, 8
 START_FEAR_MAX = 30   # сцена починається спокійно
 PEAK_FEAR_MIN = 70    # є кульмінація
 RELEASE_MIN_DROP = 15  # після піку є розрядка
+RISK_VOLUME = 0.9      # гучний різкий звук: ризик для слуху гравця в навушниках
+RISK_FEAR = 95         # екстремальний рівень страху в кульмінації
+
+
+class HumanDecision(BaseModel):
+    """Відповідь людини на запит підтвердження ризикової сцени."""
+    approved: bool = Field(description="true: сцену можна використовувати")
+    comment: str = Field(default="", description="Що змінити, якщо сцену відхилено")
 
 
 def as_text(node_input) -> str:
@@ -131,6 +141,54 @@ def gate(ctx: Context, node_input) -> Event:
     return Event(route="revise", output=verdict)
 
 
+def risk_reasons(scene: dict, audio: dict) -> list[str]:
+    """Чому сцену варто показати людині перед публікацією (порожній список: ризику немає)."""
+    reasons = []
+    peak = max((b.get("fear_target", 0) for b in scene.get("beats", [])
+                if isinstance(b.get("fear_target"), (int, float))), default=0)
+    if peak >= RISK_FEAR:
+        reasons.append(f"екстремальна кульмінація: страх {peak} >= {RISK_FEAR}")
+    for c in audio.get("cues", []):
+        vol = c.get("volume")
+        if isinstance(vol, (int, float)) and vol >= RISK_VOLUME and c.get("kind") != "silence":
+            reasons.append(f"гучний звук у біті {c.get('beat_id')}: {vol} >= {RISK_VOLUME}")
+    return reasons
+
+
+def risk_check(ctx: Context, node_input) -> Event:
+    """Детермінована перевірка перед публікацією: безпечну сцену публікуємо одразу."""
+    reasons = risk_reasons(ctx.state.get("scene") or {}, ctx.state.get("audio_plan") or {})
+    ctx.state["risk_reasons"] = reasons
+    return Event(route="risky" if reasons else "safe", output=node_input)
+
+
+def human_review(ctx: Context, node_input):
+    """Просить людину підтвердити ризикову сцену. Граф зупиняється до відповіді."""
+    reasons = ctx.state.get("risk_reasons") or []
+    return RequestInput(
+        interrupt_id=f"human_review_{ctx.state.get('drafts', 0)}",
+        message="Сцена ризикова: " + "; ".join(reasons) + ". Підтвердити використання?",
+        payload={"reasons": reasons, "scene_title": (ctx.state.get("scene") or {}).get("title")},
+        response_schema=HumanDecision,
+    )
+
+
+def human_decision(ctx: Context, node_input) -> Event:
+    """Відповідь людини -> маршрут. Відхилену сцену повертаємо автору, поки є чернетки."""
+    answer = node_input if isinstance(node_input, dict) else {}
+    comment = str(answer.get("comment") or "").strip()
+    if answer.get("approved") is True:
+        ctx.state["human"] = "approved"
+        return Event(route="approved", output=answer)
+    ctx.state["human"] = "rejected"
+    ctx.state["human_comment"] = comment
+    if ctx.state.get("drafts", 0) < MAX_DRAFTS:
+        ctx.state["feedback"] = "Людина відхилила сцену: " + (comment or "зменш інтенсивність")
+        return Event(route="revise", output=answer)
+    ctx.state["stop_reason"] = "human_rejected"
+    return Event(route="rejected", output=answer)
+
+
 def fear_curve(scene: dict) -> list[float]:
     """Крива страху, нормалізована до 0..1 для FearLevelController у Unity."""
     return [round(b.get("fear_target", 0) / 100, 2) for b in scene.get("beats", [])]
@@ -166,10 +224,15 @@ def render_report(state: dict) -> str:
         "## Внутрішній голос (Yarn Spinner)",
         *[f"- {line}" for line in scene.get("inner_voice_lines", [])],
         "",
+        *([ "## Нотатки з бази знань", str(state["kb_notes"]).strip(), ""]
+          if state.get("kb_notes") else []),
         "## Рішення",
         f"{verdict.get('decision', '?')} після {state.get('drafts', 0)} чернеток "
         f"(причина зупинки: {state.get('stop_reason', '?')}).",
     ]
+    if state.get("risk_reasons"):
+        lines.append("Ризики: " + "; ".join(state["risk_reasons"]) + ". "
+                     f"Рішення людини: {state.get('human', 'не надано')}.")
     if verdict.get("decision") != "APPROVE" and verdict.get("comments"):
         lines += ["", "Невиконані зауваження:", *[f"- {c}" for c in verdict["comments"]]]
     leftovers = (state.get("scene_issues") or []) + (state.get("link_issues") or [])
